@@ -51,12 +51,27 @@ func parseNameAddress(addressText string, a *nameAddress) (err error) {
 
 func addressStateDisplayName(a *nameAddress, s string) (addressFSM, string, error) {
 	var startQuote, endQuote int = -1, -1
+	var escaped bool = false
 	for i, c := range s {
+		if c == '\\' {
+			if startQuote > endQuote {
+				// escaping is only allowed with quotes
+				escaped = !escaped
+			}
+
+			continue
+		}
+
+		if escaped {
+			escaped = false
+			continue
+		}
+
 		if c == '"' {
-			if startQuote < 0 {
-				startQuote = i
-			} else {
+			if startQuote > endQuote {
 				endQuote = i
+			} else {
+				startQuote = i
 			}
 			continue
 		}
@@ -67,6 +82,11 @@ func addressStateDisplayName(a *nameAddress, s string) (addressFSM, string, erro
 		// and ">" are present, all parameters after the URI are header
 		// parameters, not URI parameters.
 		if c == '<' {
+			if startQuote > endQuote {
+				// within quotes, still part of display name
+				continue
+			}
+
 			if endQuote > 0 {
 				a.displayName = s[startQuote+1 : endQuote]
 			} else {
@@ -76,7 +96,8 @@ func addressStateDisplayName(a *nameAddress, s string) (addressFSM, string, erro
 		}
 
 		if c == ';' {
-			if startQuote > 0 {
+			if startQuote > endQuote {
+				// within quotes, still part of display name
 				continue
 			}
 			// detect early
